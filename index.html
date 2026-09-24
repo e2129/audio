@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>留声 · 本地音乐播放器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#15120e;
+    --surface:#211b14;
+    --surface-2:#2a231a;
+    --gold:#d4a24c;
+    --rust:#b0503a;
+    --cream:#f1e9db;
+    --muted:#8c8275;
+    --line:#39311f;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  *{box-sizing:border-box;}
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 20% -10%, #26200 a00 0%, transparent 60%),
+      var(--bg);
+    background-color:var(--bg);
+    color:var(--cream);
+    font-family:'IBM Plex Mono', monospace;
+    min-height:100%;
+    display:flex;
+    justify-content:center;
+    padding:32px 16px 48px;
+  }
+  .wrap{width:100%;max-width:760px;}
+
+  header{margin-bottom:28px;}
+  .kicker{color:var(--muted);font-size:12.5px;letter-spacing:.02em;}
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:clamp(28px,5vw,40px);
+    margin:4px 0 0;
+    color:var(--cream);
+  }
+
+  .deck{
+    background:linear-gradient(180deg,var(--surface),var(--surface-2));
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:28px;
+    display:grid;
+    grid-template-columns:180px 1fr;
+    gap:28px;
+    align-items:center;
+  }
+  @media (max-width:520px){
+    .deck{grid-template-columns:1fr;justify-items:center;text-align:center;}
+  }
+
+  .vinyl-box{position:relative;width:180px;height:180px;flex:none;}
+  .vinyl{
+    width:180px;height:180px;border-radius:50%;
+    background:
+      repeating-radial-gradient(circle at center, #0d0b08 0px, #0d0b08 2px, #1c1712 3px, #1c1712 4px);
+    border:1px solid #000;
+    position:relative;
+    animation:spin 6s linear infinite paused;
+  }
+  .vinyl.playing{animation-play-state:running;}
+  .vinyl::after{
+    content:'';position:absolute;inset:0;margin:auto;
+    width:56px;height:56px;border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 0 4px var(--surface-2), 0 0 0 5px var(--line);
+  }
+  .vinyl::before{
+    content:'';position:absolute;inset:0;margin:auto;
+    width:8px;height:8px;border-radius:50%;
+    background:var(--bg);z-index:2;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  .now-playing{min-width:0;}
+  .track-title{
+    font-family:'Fraunces', serif;
+    font-style:italic;
+    font-size:22px;
+    color:var(--cream);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .track-meta{color:var(--muted);font-size:13px;margin-top:4px;}
+
+  .seek-row{display:flex;align-items:center;gap:10px;margin-top:18px;font-size:12px;color:var(--muted);}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;
+    height:3px;background:var(--line);border-radius:2px;flex:1;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:12px;height:12px;border-radius:50%;
+    background:var(--gold);cursor:pointer;margin-top:-4.5px;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:12px;height:12px;border-radius:50%;background:var(--gold);border:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--line);border-radius:2px;}
+
+  .controls{display:flex;align-items:center;gap:14px;margin-top:18px;flex-wrap:wrap;}
+  button.ctrl{
+    background:none;border:1px solid var(--line);color:var(--cream);
+    width:40px;height:40px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:border-color .15s, transform .1s;
+  }
+  button.ctrl:hover{border-color:var(--gold);}
+  button.ctrl:active{transform:scale(.94);}
+  button.play{width:52px;height:52px;background:var(--gold);border-color:var(--gold);color:#20180a;}
+  button.play:hover{background:#e0b566;}
+  svg{width:16px;height:16px;fill:currentColor;}
+  button.play svg{width:18px;height:18px;}
+
+  .vol{display:flex;align-items:center;gap:8px;margin-left:auto;color:var(--muted);}
+  .vol input{width:80px;}
+
+  .canvas-row{margin-top:6px;height:34px;}
+  canvas{width:100%;height:34px;display:block;}
+
+  .drop{
+    margin-top:22px;
+    border:1px dashed var(--line);
+    border-radius:14px;
+    padding:22px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+    cursor:pointer;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  .drop:hover, .drop.drag{border-color:var(--gold);color:var(--gold);background:rgba(212,162,76,.05);}
+  .drop b{color:var(--cream);font-weight:500;}
+  input[type=file]{display:none;}
+
+  .playlist{margin-top:22px;border-top:1px solid var(--line);}
+  .pl-head{display:flex;justify-content:space-between;color:var(--muted);font-size:11.5px;padding:12px 4px 8px;letter-spacing:.02em;}
+  .track{
+    display:flex;align-items:center;gap:12px;
+    padding:11px 8px;border-radius:8px;cursor:pointer;
+    border-bottom:1px solid var(--line);
+  }
+  .track:last-child{border-bottom:none;}
+  .track:hover{background:var(--surface-2);}
+  .track.active{background:var(--surface-2);}
+  .track.active .t-title{color:var(--gold);}
+  .t-num{width:20px;color:var(--muted);font-size:12px;flex:none;}
+  .t-info{min-width:0;flex:1;}
+  .t-title{
+    font-family:'Fraunces', serif;font-size:15.5px;color:var(--cream);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .t-dur{color:var(--muted);font-size:12px;flex:none;}
+  .t-remove{
+    flex:none;color:var(--muted);background:none;border:none;cursor:pointer;
+    font-size:16px;line-height:1;padding:2px 6px;
+  }
+  .t-remove:hover{color:var(--rust);}
+
+  .empty{color:var(--muted);font-size:13px;padding:16px 8px;text-align:center;}
+
+  footer{margin-top:26px;color:var(--muted);font-size:11.5px;text-align:center;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="kicker">本地播放 · 无需上传</div>
+    <h1>留声</h1>
+  </header>
+
+  <div class="deck">
+    <div class="vinyl-box">
+      <div class="vinyl" id="vinyl"></div>
+    </div>
+    <div class="now-playing">
+      <div class="track-title" id="curTitle">尚未选择曲目</div>
+      <div class="track-meta" id="curMeta">从下方添加本地音频文件开始播放</div>
+
+      <div class="canvas-row"><canvas id="viz"></canvas></div>
+
+      <div class="seek-row">
+        <span id="curTime">0:00</span>
+        <input type="range" id="seek" min="0" max="100" value="0" step="0.1">
+        <span id="durTime">0:00</span>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl" id="prevBtn" title="上一首" aria-label="上一首">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l10-6v12z"/></svg>
+        </button>
+        <button class="ctrl play" id="playBtn" title="播放/暂停" aria-label="播放/暂停">
+          <svg id="playIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <button class="ctrl" id="nextBtn" title="下一首" aria-label="下一首">
+          <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM4.5 6l10 6-10 6z"/></svg>
+        </button>
+        <div class="vol">
+          <svg viewBox="0 0 24 24" style="width:15px;height:15px;"><path d="M3 10v4h4l5 5V5L7 10H3zm13.5 2a4.5 4.5 0 0 0-2.5-4.03v8.06a4.5 4.5 0 0 0 2.5-4.03z"/></svg>
+          <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="drop" id="drop">
+    <b>点击</b> 或拖拽音频文件到此处添加到播放列表&nbsp;(mp3 / wav / m4a / ogg)
+    <input type="file" id="fileInput" accept="audio/*" multiple>
+  </div>
+
+  <div class="playlist">
+    <div class="pl-head"><span>播放列表</span><span id="plCount">0 首</span></div>
+    <div id="plBody"><div class="empty">还没有曲目 — 添加几首歌开始吧</div></div>
+  </div>
+
+  <footer>所有文件仅在本地浏览器中播放，不会被上传或发送到任何服务器。</footer>
+</div>
+
+<script>
+(function(){
+  const audio = new Audio();
+  let playlist = []; // {name, url, file}
+  let currentIndex = -1;
+
+  const vinyl = document.getElementById('vinyl');
+  const curTitle = document.getElementById('curTitle');
+  const curMeta = document.getElementById('curMeta');
+  const seek = document.getElementById('seek');
+  const curTime = document.getElementById('curTime');
+  const durTime = document.getElementById('durTime');
+  const playBtn = document.getElementById('playBtn');
+  const playIcon = document.getElementById('playIcon');
+  const prevBtn = document.getElementById('prevBtn');
+  const nextBtn = document.getElementById('nextBtn');
+  const volSlider = document.getElementById('vol');
+  const drop = document.getElementById('drop');
+  const fileInput = document.getElementById('fileInput');
+  const plBody = document.getElementById('plBody');
+  const plCount = document.getElementById('plCount');
+  const canvas = document.getElementById('viz');
+  const ctx = canvas.getContext('2d');
+
+  audio.volume = 0.8;
+
+  function fmt(t){
+    if(!isFinite(t)) return '0:00';
+    const m = Math.floor(t/60), s = Math.floor(t%60);
+    return m+':'+(s<10?'0':'')+s;
+  }
+
+  function renderPlaylist(){
+    plCount.textContent = playlist.length + ' 首';
+    if(playlist.length===0){
+      plBody.innerHTML = '<div class="empty">还没有曲目 — 添加几首歌开始吧</div>';
+      return;
+    }
+    plBody.innerHTML = '';
+    playlist.forEach((t,i)=>{
+      const row = document.createElement('div');
+      row.className = 'track'+(i===currentIndex?' active':'');
+      row.innerHTML = `
+        <div class="t-num">${String(i+1).padStart(2,'0')}</div>
+        <div class="t-info">
+          <div class="t-title">${t.name}</div>
+        </div>
+        <div class="t-dur">${t.duration?fmt(t.duration):''}</div>
+        <button class="t-remove" aria-label="移除" title="移除">&times;</button>
+      `;
+      row.addEventListener('click',(e)=>{
+        if(e.target.closest('.t-remove')) return;
+        loadTrack(i, true);
+      });
+      row.querySelector('.t-remove').addEventListener('click',(e)=>{
+        e.stopPropagation();
+        removeTrack(i);
+      });
+      plBody.appendChild(row);
+    });
+  }
+
+  function removeTrack(i){
+    if(i===currentIndex){
+      audio.pause();
+      audio.removeAttribute('src');
+      currentIndex = -1;
+      curTitle.textContent = '尚未选择曲目';
+      curMeta.textContent = '从下方添加本地音频文件开始播放';
+      vinyl.classList.remove('playing');
+      setPlayIcon(false);
+    } else if(i < currentIndex){
+      currentIndex--;
+    }
+    URL.revokeObjectURL(playlist[i].url);
+    playlist.splice(i,1);
+    renderPlaylist();
+  }
+
+  function loadTrack(i, autoplay){
+    if(i<0 || i>=playlist.length) return;
+    currentIndex = i;
+    const t = playlist[i];
+    audio.src = t.url;
+    curTitle.textContent = t.name;
+    curMeta.textContent = '第 ' + (i+1) + ' / ' + playlist.length + ' 首';
+    renderPlaylist();
+    if(autoplay){
+      audio.play().catch(()=>{});
+    }
+  }
+
+  function setPlayIcon(playing){
+    playIcon.innerHTML = playing
+      ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+  }
+
+  function addFiles(fileList){
+    const files = Array.from(fileList).filter(f=>f.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(f.name));
+    if(files.length===0) return;
+    const wasEmpty = playlist.length===0;
+    files.forEach(f=>{
+      const url = URL.createObjectURL(f);
+      const item = {name: f.name.replace(/\.[^/.]+$/, ''), url, duration:null};
+      playlist.push(item);
+      const tmp = new Audio(url);
+      tmp.addEventListener('loadedmetadata', ()=>{
+        item.duration = tmp.duration;
+        renderPlaylist();
+      });
+    });
+    renderPlaylist();
+    if(wasEmpty) loadTrack(0, false);
+  }
+
+  drop.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', e=>{addFiles(e.target.files); fileInput.value='';});
+  ['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>drop.addEventListener(ev, e=>{e.preventDefault(); drop.classList.remove('drag');}));
+  drop.addEventListener('drop', e=>{
+    if(e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+  });
+
+  playBtn.addEventListener('click', ()=>{
+    if(currentIndex===-1){
+      if(playlist.length) loadTrack(0, true);
+      return;
+    }
+    if(audio.paused) audio.play().catch(()=>{});
+    else audio.pause();
+  });
+
+  prevBtn.addEventListener('click', ()=>{
+    if(playlist.length===0) return;
+    const i = currentIndex<=0 ? playlist.length-1 : currentIndex-1;
+    loadTrack(i, !audio.paused || currentIndex===-1 ? true : false);
+  });
+  nextBtn.addEventListener('click', ()=>{
+    if(playlist.length===0) return;
+    const i = currentIndex>=playlist.length-1 ? 0 : currentIndex+1;
+    loadTrack(i, true);
+  });
+
+  audio.addEventListener('play', ()=>{ vinyl.classList.add('playing'); setPlayIcon(true); });
+  audio.addEventListener('pause', ()=>{ vinyl.classList.remove('playing'); setPlayIcon(false); });
+  audio.addEventListener('ended', ()=>{
+    if(currentIndex < playlist.length-1) loadTrack(currentIndex+1, true);
+    else { vinyl.classList.remove('playing'); setPlayIcon(false); }
+  });
+  audio.addEventListener('timeupdate', ()=>{
+    if(!isFinite(audio.duration)) return;
+    seek.value = (audio.currentTime/audio.duration*100) || 0;
+    curTime.textContent = fmt(audio.currentTime);
+    durTime.textContent = fmt(audio.duration);
+  });
+  seek.addEventListener('input', ()=>{
+    if(!isFinite(audio.duration)) return;
+    audio.currentTime = seek.value/100*audio.duration;
+  });
+  volSlider.addEventListener('input', ()=>{ audio.volume = volSlider.value; });
+
+  // Visualizer
+  let audioCtx, analyser, source, dataArr;
+  function ensureAnalyser(){
+    if(audioCtx) return;
+    try{
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      source = audioCtx.createMediaElementSource(audio);
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination);
+      dataArr = new Uint8Array(analyser.frequencyBinCount);
+    }catch(e){ /* ignore */ }
+  }
+  audio.addEventListener('play', ()=>{ ensureAnalyser(); if(audioCtx && audioCtx.state==='suspended') audioCtx.resume(); });
+
+  function resizeCanvas(){
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * devicePixelRatio;
+    canvas.height = rect.height * devicePixelRatio;
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const w = canvas.width, h = canvas.height;
+    if(analyser && !audio.paused){
+      analyser.getByteFrequencyData(dataArr);
+      const n = dataArr.length;
+      const bw = w/n;
+      for(let i=0;i<n;i++){
+        const v = dataArr[i]/255;
+        const bh = Math.max(2, v*h);
+        ctx.fillStyle = i%2===0 ? '#d4a24c' : '#8c8275';
+        ctx.fillRect(i*bw+1, h-bh, bw-2, bh);
+      }
+    } else {
+      ctx.fillStyle = '#39311f';
+      const n = 32, bw = w/n;
+      for(let i=0;i<n;i++){
+        ctx.fillRect(i*bw+1, h-3, bw-2, 3);
+      }
+    }
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
