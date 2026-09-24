@@ -469,7 +469,7 @@
 
   async function loadRemotePlaylist(){
     try{
-      const res = await fetch('songs/playlist.json', {cache:'no-store'});
+      const res = await fetch('mp3/playlist.json', {cache:'no-store'});
       if(!res.ok) return;
       const files = await res.json();
       if(!Array.isArray(files) || files.length===0) return;
