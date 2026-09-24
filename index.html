@@ -172,6 +172,16 @@
   .empty{color:var(--muted);font-size:13px;padding:16px 8px;text-align:center;}
 
   footer{margin-top:26px;color:var(--muted);font-size:11.5px;text-align:center;}
+
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
+    background:var(--surface-2);border:1px solid var(--line);color:var(--cream);
+    padding:10px 16px;border-radius:10px;font-size:12.5px;
+    box-shadow:0 8px 24px rgba(0,0,0,.4);
+    opacity:0;pointer-events:none;transition:opacity .2s;z-index:10;
+    max-width:90vw;text-align:center;
+  }
+  .toast.show{opacity:1;pointer-events:auto;}
 </style>
 </head>
 <body>
@@ -227,6 +237,7 @@
 
   <footer>所有文件仅在本地浏览器中播放，不会被上传或发送到任何服务器。</footer>
 </div>
+<div class="toast" id="toast"></div>
 
 <script>
 (function(){
@@ -437,6 +448,49 @@
     }
   }
   draw();
+
+  // --- 自动加载 songs/ 目录下的曲目（通过 songs/playlist.json 清单） ---
+  function showToast(msg){
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(()=>el.classList.remove('show'), 5000);
+  }
+
+  function attemptAutoplay(){
+    const p = audio.play();
+    if(p && p.catch){
+      p.catch(()=>{
+        showToast('浏览器阻止了自动播放，点击 ▶ 开始播放');
+      });
+    }
+  }
+
+  async function loadRemotePlaylist(){
+    try{
+      const res = await fetch('songs/playlist.json', {cache:'no-store'});
+      if(!res.ok) return;
+      const files = await res.json();
+      if(!Array.isArray(files) || files.length===0) return;
+      const wasEmpty = playlist.length===0;
+      files.forEach(name=>{
+        const url = 'songs/' + encodeURIComponent(name);
+        const item = {name: name.replace(/\.[^/.]+$/, ''), url, duration:null};
+        playlist.push(item);
+        const tmp = new Audio(url);
+        tmp.addEventListener('loadedmetadata', ()=>{ item.duration = tmp.duration; renderPlaylist(); });
+      });
+      renderPlaylist();
+      if(wasEmpty){
+        loadTrack(0, false);
+        attemptAutoplay();
+      }
+    }catch(e){
+      // 没有 songs/playlist.json（比如本地预览时），静默忽略
+    }
+  }
+  loadRemotePlaylist();
 })();
 </script>
 </body>
